@@ -92,7 +92,7 @@ async def process_image_prompt(
 
     try:
         # Вызов сервиса генерации
-        image_bytes = await image_service.generate_image(prompt)
+        image_bytes, used_model, is_fallback = await image_service.generate_image(prompt)
         
         # Удаляем сообщение со статусом
         try:
@@ -102,14 +102,24 @@ async def process_image_prompt(
 
         # Подготовка файла из памяти и отправка в Telegram
         photo_file = BufferedInputFile(file=image_bytes, filename="generated_image.png")
-        caption_text = f"✨ <b>Результат по вашему описанию:</b>\n<i>{prompt[:250]}</i>"
+        
+        caption_lines = [
+            "✨ <b>Результат по вашему описанию:</b>",
+            f"<i>{prompt[:250]}</i>",
+            "",
+            f"🎯 <b>Модель:</b> <code>{used_model}</code>"
+        ]
+        if is_fallback:
+            caption_lines.append("ℹ️ <i>(В Google AI Studio лимит 0, использован резерв Flux Realism)</i>")
+
+        caption_text = "\n".join(caption_lines)
         
         await message.answer_photo(
             photo=photo_file,
             caption=caption_text,
             parse_mode="HTML"
         )
-        logger.info("[INFO] Photo successfully sent to user_id=%d", user_id)
+        logger.info("[INFO] Photo successfully sent to user_id=%d (model=%s)", user_id, used_model)
 
     except ImageQuotaError as quota_err:
         logger.warning("[WARNING] Quota error during image generation: %s", quota_err)

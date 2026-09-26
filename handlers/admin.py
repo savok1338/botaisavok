@@ -11,6 +11,8 @@ from keyboards.admin import (
     get_admin_keyboard,
     get_admin_cancel_keyboard,
     get_role_actions_keyboard,
+    get_text_models_keyboard,
+    get_image_models_keyboard,
 )
 from states import AdminStates
 
@@ -28,17 +30,21 @@ def format_admin_menu_text() -> str:
     """Форматирование главного текста админ-панели."""
     ai_status = "🟢 <b>ВКЛЮЧЕН</b>" if database.is_ai_enabled() else "🔴 <b>ОТКЛЮЧЕН</b>"
     users_cnt = database.get_users_count()
+    text_model = database.get_text_model()
+    image_model = database.get_image_model()
     current_prompt = database.get_system_prompt()
-    if len(current_prompt) > 120:
-        current_prompt = current_prompt[:120] + "..."
+    if len(current_prompt) > 100:
+        current_prompt = current_prompt[:100] + "..."
     disabled_text = database.get_disabled_message()
 
     return (
         "⚙️ <b>Панель управления администратора</b>\n\n"
         f"• <b>Статус работы ИИ:</b> {ai_status}\n"
-        f"• <b>Пользователей в базе:</b> {users_cnt}\n"
-        f"• <b>Текст заглушки при выключении:</b>\n<i>{disabled_text}</i>\n\n"
+        f"• <b>Модель текста:</b> <code>{text_model}</code>\n"
+        f"• <b>Модель картинок:</b> <code>{image_model}</code>\n"
+        f"• <b>Пользователей в базе:</b> {users_cnt}\n\n"
         f"• <b>Текущая роль (AGENTS):</b>\n<code>{current_prompt}</code>\n\n"
+        f"• <b>Текст при отключении:</b>\n<i>{disabled_text}</i>\n\n"
         "Выберите действие в меню ниже 👇"
     )
 
@@ -254,6 +260,66 @@ async def process_broadcast_message(message: Message, state: FSMContext, bot: Bo
         reply_markup=get_admin_keyboard(),
         parse_mode="HTML"
     )
+
+
+@router.callback_query(F.data == "admin:text_models")
+async def callback_text_models(call: CallbackQuery) -> None:
+    """Меню выбора модели текстового ИИ."""
+    if not is_admin(call.from_user.id):
+        return
+    text = (
+        "🧠 <b>Выбор модели текстового ИИ (Google Gemini)</b>\n\n"
+        f"Текущая активная модель: <code>{database.get_text_model()}</code>\n\n"
+        "Выберите модель из списка ниже (активная отмечена ✅):"
+    )
+    await call.message.edit_text(text, reply_markup=get_text_models_keyboard(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("admin:set_tm:"))
+async def callback_set_text_model(call: CallbackQuery) -> None:
+    """Установка выбранной модели текста."""
+    if not is_admin(call.from_user.id):
+        return
+    model_id = call.data.split(":", 2)[2]
+    database.set_text_model(model_id)
+    await call.answer(f"Модель текста: {model_id}")
+    text = (
+        "🧠 <b>Выбор модели текстового ИИ (Google Gemini)</b>\n\n"
+        f"Текущая активная модель: <code>{model_id}</code>\n\n"
+        "Выберите модель из списка ниже (активная отмечена ✅):"
+    )
+    await call.message.edit_text(text, reply_markup=get_text_models_keyboard(), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "admin:image_models")
+async def callback_image_models(call: CallbackQuery) -> None:
+    """Меню выбора модели генерации картинок."""
+    if not is_admin(call.from_user.id):
+        return
+    text = (
+        "🎨 <b>Выбор модели генерации картинок</b>\n\n"
+        f"Текущая активная модель: <code>{database.get_image_model()}</code>\n\n"
+        "<i>Поддерживаются модели Google Pro (Nano-Banana, Gemini 3 Pro) и фотореалистичные движки Flux.</i>\n\n"
+        "Выберите модель из списка ниже (активная отмечена ✅):"
+    )
+    await call.message.edit_text(text, reply_markup=get_image_models_keyboard(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("admin:set_im:"))
+async def callback_set_image_model(call: CallbackQuery) -> None:
+    """Установка выбранной модели картинок."""
+    if not is_admin(call.from_user.id):
+        return
+    model_id = call.data.split(":", 2)[2]
+    database.set_image_model(model_id)
+    await call.answer(f"Модель картинок: {model_id}")
+    text = (
+        "🎨 <b>Выбор модели генерации картинок</b>\n\n"
+        f"Текущая активная модель: <code>{model_id}</code>\n\n"
+        "<i>Поддерживаются модели Google Pro (Nano-Banana, Gemini 3 Pro) и фотореалистичные движки Flux.</i>\n\n"
+        "Выберите модель из списка ниже (активная отмечена ✅):"
+    )
+    await call.message.edit_text(text, reply_markup=get_image_models_keyboard(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "admin:stats")

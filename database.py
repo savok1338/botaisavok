@@ -127,3 +127,26 @@ def get_disabled_message() -> str:
 def set_disabled_message(msg: str) -> None:
     """Установить сообщение при отключенном ИИ."""
     set_setting("disabled_message", msg.strip())
+
+
+def get_text_model() -> str:
+    """Получить выбранную модель для текстового ИИ."""
+    import config
+    return get_setting("text_model", config.GEMINI_TEXT_MODEL)
+
+
+def set_text_model(model_name: str) -> None:
+    """Установить выбранную модель для текстового ИИ."""
+    set_setting("text_model", model_name.strip())
+
+
+def get_image_model() -> str:
+    """Получить выбранную модель для генерации изображений."""
+    import config
+    return get_setting("image_model", config.GEMINI_IMAGE_MODEL)
+
+
+def set_image_model(model_name: str) -> None:
+    """Установить выбранную модель для генерации изображений."""
+    set_setting("image_model", model_name.strip())
+

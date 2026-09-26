@@ -170,13 +170,14 @@ class GeminiService:
         history = self._storage.get_history(user_id)
         contents = self._build_gemini_contents(history, prompt)
         
+        active_primary = database.get_text_model()
         reply_text = ""
         try:
-            # 1. Сначала пробуем основную модель
-            reply_text = await self._send_request_with_retry(self._primary_model, contents)
+            # 1. Сначала пробуем активную выбранную модель
+            reply_text = await self._send_request_with_retry(active_primary, contents)
         except Exception as primary_err:
             logger.warning("[WARNING] Основная модель %s вернула ошибку: %s. Пробуем резервную модель %s...",
-                           self._primary_model, primary_err, self._fallback_model)
+                           active_primary, primary_err, self._fallback_model)
             try:
                 # 2. При сбое пробуем резервную легковесную модель
                 reply_text = await self._send_request_with_retry(self._fallback_model, contents)
