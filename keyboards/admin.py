@@ -12,7 +12,7 @@ AVAILABLE_TEXT_MODELS = [
 
 # Доступные проверенные модели генерации картинок
 AVAILABLE_IMAGE_MODELS = [
-    ("hf-flux", "🔥 Hugging Face FLUX.1 (Оригинал 1024x1024)"),
+    ("hf-sd3", "🌟 Stable Diffusion 3 (Hugging Face 1024x1024)"),
     ("nano-banana-pro-preview", "🍌 Nano-Banana Pro (Google Pro)"),
     ("gemini-3-pro-image", "🌟 Gemini 3 Pro Image (Google Pro)"),
     ("gemini-3.1-flash-image", "⚡ Gemini 3.1 Flash Image (Google)"),

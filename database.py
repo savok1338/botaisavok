@@ -143,7 +143,7 @@ def set_text_model(model_name: str) -> None:
 def get_image_model() -> str:
     """Получить выбранную модель для генерации изображений."""
     import config
-    return get_setting("image_model", config.GEMINI_IMAGE_MODEL)
+    return get_setting("image_model", getattr(config, "GEMINI_IMAGE_MODEL", "hf-sd3"))
 
 
 def set_image_model(model_name: str) -> None:

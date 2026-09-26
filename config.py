@@ -17,8 +17,8 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_TEXT_MODEL: str = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.5-flash").strip()
 GEMINI_FALLBACK_TEXT_MODEL: str = os.getenv("GEMINI_FALLBACK_TEXT_MODEL", "gemini-3.5-flash-lite").strip()
 
-# Модель для генерации изображений через Google Imagen 3 (флагманская модель Google)
-GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "imagen-3.0-generate-002").strip()
+# Модель для генерации изображений по умолчанию (Hugging Face Stable Diffusion 3)
+GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "hf-sd3").strip()
 
 # Токен Hugging Face для бесплатной генерации FLUX.1
 HF_TOKEN: str = os.getenv("HF_TOKEN", "").strip()

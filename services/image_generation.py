@@ -213,26 +213,21 @@ class ImageGenerationService:
 
     async def _generate_via_huggingface(self, english_prompt: str) -> bytes:
         """
-        Генерация изображения через официальный Hugging Face Inference API (FLUX.1-schnell).
-        Топовая модель с фотореализмом и честным разрешением 1024x1024.
+        Генерация изображения через официальный Hugging Face Inference API (Stable Diffusion 3 Medium).
+        Флагманская модель от Stability AI с фотореализмом и разрешением 1024x1024.
         """
         token = getattr(config, "HF_TOKEN", "") or os.getenv("HF_TOKEN", "")
         if not token:
             raise ImageGenerationError("HF_TOKEN не указан в файле .env")
 
-        url = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
+        url = "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3-medium-diffusers"
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "TelegramBot/1.0"
         }
         payload = {
-            "inputs": english_prompt,
-            "parameters": {
-                "width": 1024,
-                "height": 1024,
-                "num_inference_steps": 4
-            }
+            "inputs": english_prompt
         }
         timeout = aiohttp.ClientTimeout(total=45)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -255,11 +250,11 @@ class ImageGenerationService:
         # 1. Переводим промпт на детальный английский через Gemini
         english_prompt = await self._translate_prompt(prompt)
 
-        # 2. Если выбрана модель Hugging Face FLUX.1
-        if current_model == "hf-flux":
+        # 2. Если выбрана модель Hugging Face (Stable Diffusion 3 / FLUX)
+        if current_model in ("hf-sd3", "hf-flux"):
             try:
                 hf_bytes = await self._generate_via_huggingface(english_prompt)
-                return hf_bytes, "Hugging Face FLUX.1", False
+                return hf_bytes, "Stable Diffusion 3 (HF)", False
             except Exception as hf_err:
                 logger.warning("[WARNING] Hugging Face ошибка: %s, переключение на резерв...", hf_err)
                 if self._fallback_enabled:
