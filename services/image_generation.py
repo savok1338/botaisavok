@@ -70,26 +70,69 @@ class ImageGenerationService:
         
         return None
 
+    async def _translate_prompt(self, text: str) -> str:
+        """
+        Переводит русский текст запроса на английский язык,
+        так как нейросети генерации картинок понимают только английский.
+        """
+        # Если в тексте нет кириллицы, перевод не нужен
+        if not any('\u0400' <= char <= '\u04FF' for char in text):
+            return text
+
+        try:
+            url = "https://api.mymemory.translated.net/get"
+            params = {
+                "q": text,
+                "langpair": "ru|en"
+            }
+            client_timeout = aiohttp.ClientTimeout(total=6)
+            proxy_url = getattr(config, "PROXY_URL", None) or os.getenv("HTTP_PROXY") or None
+            async with aiohttp.ClientSession(timeout=client_timeout) as session:
+                async with session.get(url, params=params, proxy=proxy_url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        translated = data.get("responseData", {}).get("translatedText", "")
+                        if translated and not translated.startswith("MYMEMORY WARNING"):
+                            cleaned = translated.strip()
+                            for prefix in ["make a ", "draw a ", "create a ", "generate a ", "picture of a ", "make ", "draw ", "create "]:
+                                if cleaned.lower().startswith(prefix):
+                                    cleaned = cleaned[len(prefix):]
+                            logger.info("[INFO] Промпт переведен на английский: '%s' -> '%s'", text, cleaned)
+                            return cleaned
+        except Exception as e:
+            logger.warning("[WARNING] Ошибка перевода промпта: %s", e)
+
+        return text
+
     async def _generate_via_fallback(self, prompt: str) -> bytes:
         """
         Резервный генератор через открытый высокопроизводительный AI-эндпоинт (Flux/SDXL).
         Используется, когда у пользователя бесплатный ключ Gemini без привязки карты к Google Cloud.
         """
-        logger.info("[INFO] Используется резервный быстрый генератор изображений...")
-        safe_prompt = aiohttp.helpers.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
+        logger.info("[INFO] Используется резервный генератор изображений...")
+        
+        # 1. Переводим русский промпт на английский, чтобы нейросеть поняла суть, а не рисовала случайного кота
+        english_prompt = await self._translate_prompt(prompt)
+        
+        # 2. Усиливаем промпт описанием качества
+        enhanced_prompt = f"{english_prompt}, detailed, high quality, 3d render"
+        safe_prompt = aiohttp.helpers.quote(enhanced_prompt)
+        
+        import random
+        seed = random.randint(1, 999999)
+        url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&seed={seed}&nologo=true"
         
         client_timeout = aiohttp.ClientTimeout(total=self._timeout)
-        headers = {"User-Agent": "TelegramBot-Gemini/1.0"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         
         proxy_url = getattr(config, "PROXY_URL", None) or os.getenv("HTTP_PROXY") or None
         async with aiohttp.ClientSession(timeout=client_timeout) as session:
             async with session.get(url, headers=headers, proxy=proxy_url) as resp:
                 if resp.status != 200:
-                    raise ImageGenerationError(f"HTTP ошибка резервного генератора: {resp.status}")
+                    raise ImageGenerationError(f"HTTP ошибка генератора: {resp.status}")
                 image_bytes = await resp.read()
                 if not image_bytes:
-                    raise ImageGenerationError("Резервный генератор вернул пустые данные.")
+                    raise ImageGenerationError("Генератор вернул пустые данные.")
                 return image_bytes
 
     async def generate_image(self, prompt: str) -> bytes:
