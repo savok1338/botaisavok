@@ -20,10 +20,7 @@ router = Router(name="admin_router")
 
 
 def is_admin(user_id: int) -> bool:
-    """Проверка прав администратора."""
-    # Если список ADMIN_IDS пуст, доступ временно открыт для настройки, с предупреждением
-    if not config.ADMIN_IDS:
-        return True
+    """Строгая проверка прав администратора."""
     return user_id in config.ADMIN_IDS
 
 

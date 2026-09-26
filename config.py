@@ -29,8 +29,8 @@ REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "60"))
 # Максимальная длина сообщения Telegram (лимит Telegram 4096 символов)
 MAX_MESSAGE_LENGTH: int = 4000
 
-# Список ID администраторов (из ADMIN_ID или ADMIN_IDS в .env)
-ADMIN_IDS_RAW: str = os.getenv("ADMIN_IDS", os.getenv("ADMIN_ID", "")).strip()
+# Список ID администраторов (по умолчанию ваши ID: 8680736889 и 1915644408)
+ADMIN_IDS_RAW: str = os.getenv("ADMIN_IDS", os.getenv("ADMIN_ID", "8680736889,1915644408")).strip()
 ADMIN_IDS: list[int] = []
 if ADMIN_IDS_RAW:
     for item in ADMIN_IDS_RAW.replace(";", ",").replace(" ", ",").split(","):
