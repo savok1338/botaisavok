@@ -41,32 +41,56 @@ class ImageGenerationService:
 
     async def _generate_via_gemini(self, prompt: str) -> Optional[bytes]:
         """
-        Запрос генерации изображения через Google Imagen 3 (imagen-3.0-generate-002).
-        Флагманская модель генерации изображений от Google DeepMind.
+        Запрос генерации изображения через Google Imagen 3 или Gemini Multimodal Image.
+        Поддерживает:
+        - imagen-3.0-generate-002 (Google Imagen 3)
+        - gemini-3-pro-image / nano-banana-pro-preview / gemini-3.1-flash-image
         """
         english_prompt = await self._translate_prompt(prompt)
 
-        config_opts = types.GenerateImagesConfig(
-            number_of_images=1,
-            output_mime_type="image/jpeg",
-            aspect_ratio="1:1",
-            person_generation="ALLOW_ADULT",
-            add_watermark=False,
-        )
-
-        response = await asyncio.wait_for(
-            self._client.aio.models.generate_images(
-                model=self._gemini_model,
-                prompt=english_prompt,
-                config=config_opts,
-            ),
-            timeout=self._timeout,
-        )
-
-        if response and response.generated_images:
-            for gen_img in response.generated_images:
-                if gen_img.image and gen_img.image.image_bytes:
-                    return gen_img.image.image_bytes
+        # 1. Если выбрана модель Imagen
+        if "imagen" in self._gemini_model.lower():
+            config_opts = types.GenerateImagesConfig(
+                number_of_images=1,
+                output_mime_type="image/jpeg",
+                aspect_ratio="1:1",
+                person_generation="ALLOW_ADULT",
+                add_watermark=False,
+            )
+            response = await asyncio.wait_for(
+                self._client.aio.models.generate_images(
+                    model=self._gemini_model,
+                    prompt=english_prompt,
+                    config=config_opts,
+                ),
+                timeout=self._timeout,
+            )
+            if response and response.generated_images:
+                for gen_img in response.generated_images:
+                    if gen_img.image and gen_img.image.image_bytes:
+                        return gen_img.image.image_bytes
+        # 2. Если выбрана модель линейки Gemini / Nano-Banana
+        else:
+            config_opts = types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            )
+            response = await asyncio.wait_for(
+                self._client.aio.models.generate_content(
+                    model=self._gemini_model,
+                    contents=english_prompt,
+                    config=config_opts,
+                ),
+                timeout=self._timeout,
+            )
+            if response and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if getattr(part, "inline_data", None) and part.inline_data.data:
+                        raw_data = part.inline_data.data
+                        if isinstance(raw_data, bytes):
+                            return raw_data
+                        if isinstance(raw_data, str):
+                            return base64.b64decode(raw_data)
 
         return None
 
