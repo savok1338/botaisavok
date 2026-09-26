@@ -9,3 +9,12 @@ class UserMode(StatesGroup):
     """
     chat_mode = State()
     image_mode = State()
+
+
+class AdminStates(StatesGroup):
+    """
+    Состояния FSM для администратора.
+    """
+    waiting_for_system_prompt = State()
+    waiting_for_broadcast_text = State()
+    waiting_for_disabled_message = State()

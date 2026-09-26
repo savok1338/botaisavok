@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 import config
+import database
 from keyboards.main import get_back_keyboard
 from services.gemini import GeminiService
 from states import UserMode
@@ -22,6 +23,17 @@ async def enter_chat_mode(message: Message, state: FSMContext) -> None:
     """
     Переводит пользователя в режим текстового диалога с Gemini.
     """
+    # Сохраняем пользователя в базу
+    database.add_user(
+        user_id=message.from_user.id if message.from_user else 0,
+        username=message.from_user.username if message.from_user else None,
+        first_name=message.from_user.first_name if message.from_user else None
+    )
+
+    if not database.is_ai_enabled():
+        await message.answer(database.get_disabled_message())
+        return
+
     await state.set_state(UserMode.chat_mode)
     user_id = message.from_user.id if message.from_user else 0
     logger.info("[INFO] User %d switched to chat mode", user_id)
@@ -52,7 +64,11 @@ async def process_chat_message(
         return
 
     if user_text.startswith("/"):
-        # Если пользователь ввел команду вроде /reset или /help, не передаем её в Gemini
+        return
+
+    # Проверка, включен ли ИИ администратором
+    if not database.is_ai_enabled():
+        await message.answer(database.get_disabled_message())
         return
 
     # Проверка на превышение длины входного сообщения

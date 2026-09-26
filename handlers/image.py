@@ -6,6 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, BufferedInputFile
 
+import database
 from keyboards.main import get_back_keyboard
 from services.image_generation import ImageGenerationService, ImageQuotaError
 from states import UserMode
@@ -20,6 +21,17 @@ async def enter_image_mode(message: Message, state: FSMContext) -> None:
     """
     Переводит пользователя в режим генерации изображений.
     """
+    # Сохраняем пользователя в базу
+    database.add_user(
+        user_id=message.from_user.id if message.from_user else 0,
+        username=message.from_user.username if message.from_user else None,
+        first_name=message.from_user.first_name if message.from_user else None
+    )
+
+    if not database.is_ai_enabled():
+        await message.answer(database.get_disabled_message())
+        return
+
     await state.set_state(UserMode.image_mode)
     user_id = message.from_user.id if message.from_user else 0
     logger.info("[INFO] User %d switched to image generation mode", user_id)
@@ -52,6 +64,11 @@ async def process_image_prompt(
         return
 
     if prompt.startswith("/"):
+        return
+
+    # Проверка, включен ли ИИ администратором
+    if not database.is_ai_enabled():
+        await message.answer(database.get_disabled_message())
         return
 
     logger.info("[INFO] Image generation started for user_id=%d", user_id)

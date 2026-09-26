@@ -26,4 +26,6 @@ logs/
 .DS_Store
 Thumbs.db
 *.zip
+*.db
+*.sqlite3
 .agents/

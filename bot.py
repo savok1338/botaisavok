@@ -11,6 +11,8 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 import config
+import database
+from handlers.admin import router as admin_router
 from handlers.start import router as start_router
 from handlers.chat import router as chat_router
 from handlers.image import router as image_router
@@ -50,7 +52,9 @@ async def main() -> None:
     """
     Главная точка входа для инициализации и запуска бота.
     """
+    # 1. Валидация конфигурации и инициализация базы данных
     config.validate_config()
+    database.init_db()
 
     # Инициализация сессии с прокси (для PythonAnywhere и других прокси-сред)
     bot_session = None
@@ -76,6 +80,8 @@ async def main() -> None:
     dp["gemini_service"] = gemini_service
     dp["image_service"] = image_service
 
+    # Сначала подключаем роутер админки, затем остальные
+    dp.include_router(admin_router)
     dp.include_router(start_router)
     dp.include_router(chat_router)
     dp.include_router(image_router)

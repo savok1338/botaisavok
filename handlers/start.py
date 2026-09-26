@@ -6,6 +6,7 @@ from aiogram.types import Message
 
 from keyboards.main import get_main_keyboard
 from services.gemini import GeminiService
+import database
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,10 @@ async def handle_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     user_name = message.from_user.first_name if message.from_user else "друг"
     user_id = message.from_user.id if message.from_user else 0
+    username = message.from_user.username if message.from_user else None
+    
+    # Сохраняем пользователя в базу для статистики и рассылок
+    database.add_user(user_id=user_id, username=username, first_name=user_name)
     logger.info("[INFO] User %d executed /start", user_id)
 
     welcome_text = (

@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import logging
+import os
 from typing import Optional
 import aiohttp
 from google import genai

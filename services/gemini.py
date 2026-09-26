@@ -6,6 +6,7 @@ from google import genai
 from google.genai import types, errors
 
 import config
+import database
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +114,11 @@ class GeminiService:
         for attempt in range(max_retries + 1):
             try:
                 # Отключаем автоматический вызов функций (AFC), так как бот работает в режиме чистого диалога
+                system_prompt = database.get_system_prompt()
                 config_opts = types.GenerateContentConfig(
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                     temperature=0.7,
+                    system_instruction=system_prompt if system_prompt else None,
                 )
                 
                 response = await asyncio.wait_for(
