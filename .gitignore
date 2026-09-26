@@ -1,0 +1,29 @@
+# Секретные переменные окружения и ключи
+.env
+
+# Виртуальные окружения Python
+venv/
+.venv/
+env/
+ENV/
+
+# Байткод Python и кэш
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Логи и временные файлы
+*.log
+*.tmp
+logs/
+
+# Настройки IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+*.zip
+.agents/
