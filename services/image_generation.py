@@ -211,6 +211,39 @@ class ImageGenerationService:
                         raise ImageGenerationError("Генератор вернул пустые данные.")
                     return self._remove_watermark(raw_bytes)
 
+    async def _generate_via_huggingface(self, english_prompt: str) -> bytes:
+        """
+        Генерация изображения через официальный Hugging Face Inference API (FLUX.1-schnell).
+        Топовая модель с фотореализмом и честным разрешением 1024x1024.
+        """
+        token = getattr(config, "HF_TOKEN", "") or os.getenv("HF_TOKEN", "")
+        if not token:
+            raise ImageGenerationError("HF_TOKEN не указан в файле .env")
+
+        url = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "TelegramBot/1.0"
+        }
+        payload = {
+            "inputs": english_prompt,
+            "parameters": {
+                "width": 1024,
+                "height": 1024,
+                "num_inference_steps": 4
+            }
+        }
+        timeout = aiohttp.ClientTimeout(total=45)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status == 200:
+                    raw_bytes = await resp.read()
+                    if raw_bytes and len(raw_bytes) > 5000:
+                        return raw_bytes
+                error_body = await resp.text()
+                raise ImageGenerationError(f"Hugging Face HTTP {resp.status}: {error_body[:200]}")
+
     async def generate_image(self, prompt: str) -> Tuple[bytes, str, bool]:
         """
         Главный метод генерации изображения.
@@ -222,7 +255,19 @@ class ImageGenerationService:
         # 1. Переводим промпт на детальный английский через Gemini
         english_prompt = await self._translate_prompt(prompt)
 
-        # 2. Если выбрана модель Google Gemini / Pro / Imagen
+        # 2. Если выбрана модель Hugging Face FLUX.1
+        if current_model == "hf-flux":
+            try:
+                hf_bytes = await self._generate_via_huggingface(english_prompt)
+                return hf_bytes, "Hugging Face FLUX.1", False
+            except Exception as hf_err:
+                logger.warning("[WARNING] Hugging Face ошибка: %s, переключение на резерв...", hf_err)
+                if self._fallback_enabled:
+                    fallback_bytes = await self._generate_via_fallback(english_prompt, model="flux-realism")
+                    return fallback_bytes, "Flux Realism", True
+                raise hf_err
+
+        # 3. Если выбрана модель Google Gemini / Pro / Imagen
         is_google_model = any(k in current_model.lower() for k in ["gemini", "banana", "imagen"])
         if is_google_model:
             try:
@@ -247,6 +292,6 @@ class ImageGenerationService:
                 "Привяжите карту в Google Cloud/AI Studio или выберите модель 'Flux Realism' в панели /admin."
             )
 
-        # 3. Если выбрана модель открытого семейства Flux / Turbo
+        # 4. Если выбрана модель открытого семейства Flux / Turbo
         fallback_bytes = await self._generate_via_fallback(english_prompt, model=current_model)
         return fallback_bytes, current_model, False

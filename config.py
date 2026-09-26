@@ -20,6 +20,9 @@ GEMINI_FALLBACK_TEXT_MODEL: str = os.getenv("GEMINI_FALLBACK_TEXT_MODEL", "gemin
 # Модель для генерации изображений через Google Imagen 3 (флагманская модель Google)
 GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "imagen-3.0-generate-002").strip()
 
+# Токен Hugging Face для бесплатной генерации FLUX.1
+HF_TOKEN: str = os.getenv("HF_TOKEN", "").strip()
+
 # Включение бесплатного fallback-генератора изображений (на случай лимита limit: 0 в Free Tier Google)
 ENABLE_FREE_IMAGE_FALLBACK: bool = os.getenv("ENABLE_FREE_IMAGE_FALLBACK", "true").lower() in ("true", "1", "yes")
 
