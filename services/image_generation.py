@@ -41,33 +41,33 @@ class ImageGenerationService:
 
     async def _generate_via_gemini(self, prompt: str) -> Optional[bytes]:
         """
-        Запрос генерации изображения через Google GenAI SDK.
+        Запрос генерации изображения через Google Imagen 3 (imagen-3.0-generate-002).
+        Флагманская модель генерации изображений от Google DeepMind.
         """
-        config_opts = types.GenerateContentConfig(
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        english_prompt = await self._translate_prompt(prompt)
+
+        config_opts = types.GenerateImagesConfig(
+            number_of_images=1,
+            output_mime_type="image/jpeg",
+            aspect_ratio="1:1",
+            person_generation="ALLOW_ADULT",
+            add_watermark=False,
         )
 
         response = await asyncio.wait_for(
-            self._client.aio.models.generate_content(
+            self._client.aio.models.generate_images(
                 model=self._gemini_model,
-                contents=prompt,
+                prompt=english_prompt,
                 config=config_opts,
             ),
             timeout=self._timeout,
         )
 
-        if not response.candidates:
-            return None
+        if response and response.generated_images:
+            for gen_img in response.generated_images:
+                if gen_img.image and gen_img.image.image_bytes:
+                    return gen_img.image.image_bytes
 
-        # Ищем часть ответа, содержащую inline-изображение (bytes или base64)
-        for part in response.candidates[0].content.parts:
-            if getattr(part, "inline_data", None) and part.inline_data.data:
-                raw_data = part.inline_data.data
-                if isinstance(raw_data, bytes):
-                    return raw_data
-                if isinstance(raw_data, str):
-                    return base64.b64decode(raw_data)
-        
         return None
 
     async def _translate_prompt(self, text: str) -> str:

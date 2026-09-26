@@ -17,8 +17,8 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_TEXT_MODEL: str = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.5-flash").strip()
 GEMINI_FALLBACK_TEXT_MODEL: str = os.getenv("GEMINI_FALLBACK_TEXT_MODEL", "gemini-3.5-flash-lite").strip()
 
-# Модель для генерации изображений через Gemini Developer API
-GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image").strip()
+# Модель для генерации изображений через Google Imagen 3 (флагманская модель Google)
+GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "imagen-3.0-generate-002").strip()
 
 # Включение бесплатного fallback-генератора изображений (на случай лимита limit: 0 в Free Tier Google)
 ENABLE_FREE_IMAGE_FALLBACK: bool = os.getenv("ENABLE_FREE_IMAGE_FALLBACK", "true").lower() in ("true", "1", "yes")
