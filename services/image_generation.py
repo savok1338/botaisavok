@@ -104,36 +104,83 @@ class ImageGenerationService:
 
         return text
 
+    def _remove_watermark(self, image_bytes: bytes) -> bytes:
+        """
+        Удаляет водяной знак Pollinations в нижнем правом углу,
+        аккуратно обрезает нижнюю кромку и повышает резкость и разрешение.
+        """
+        try:
+            import io
+            from PIL import Image, ImageEnhance
+            img = Image.open(io.BytesIO(image_bytes))
+            w, h = img.size
+            if h > 100:
+                # Обрезаем нижнюю кромку с гарантированным запасом (50 пикселей или 7% высоты),
+                # чтобы стереть любой след водяного знака pollinations.ai
+                crop_bottom = max(50, int(h * 0.07))
+                cropped = img.crop((0, 0, w, h - crop_bottom))
+                cw, ch = cropped.size
+
+                # Масштабируем до 1024px через Lanczos для четкости
+                target_w = 1024
+                target_h = int(target_w * (ch / cw))
+                upscaled = cropped.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+                # Повышаем резкость, убирая замыленность
+                enhancer = ImageEnhance.Sharpness(upscaled)
+                sharpened = enhancer.enhance(1.25)
+
+                output = io.BytesIO()
+                sharpened.save(output, format="JPEG", quality=95)
+                return output.getvalue()
+        except Exception as e:
+            logger.warning("[WARNING] Не удалось обработать водяной знак / резкость: %s", e)
+        return image_bytes
+
     async def _generate_via_fallback(self, prompt: str) -> bytes:
         """
         Резервный генератор через открытый высокопроизводительный AI-эндпоинт (Flux/SDXL).
         Используется, когда у пользователя бесплатный ключ Gemini без привязки карты к Google Cloud.
         """
-        logger.info("[INFO] Используется резервный генератор изображений...")
+        logger.info("[INFO] Используется резервный генератор изображений высокой четкости...")
         
         # 1. Переводим русский промпт на английский, чтобы нейросеть поняла суть, а не рисовала случайного кота
         english_prompt = await self._translate_prompt(prompt)
         
-        # 2. Усиливаем промпт описанием качества
-        enhanced_prompt = f"{english_prompt}, detailed, high quality, 3d render"
+        # 2. Усиливаем промпт описанием качества, резкости и стиля
+        enhanced_prompt = f"{english_prompt}, sharp focus, photorealistic, 8k, detailed, professional photography, masterpiece"
         safe_prompt = aiohttp.helpers.quote(enhanced_prompt)
         
         import random
         seed = random.randint(1, 999999)
-        url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&seed={seed}&nologo=true"
         
-        client_timeout = aiohttp.ClientTimeout(total=self._timeout)
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        
         proxy_url = getattr(config, "PROXY_URL", None) or os.getenv("HTTP_PROXY") or None
-        async with aiohttp.ClientSession(timeout=client_timeout) as session:
-            async with session.get(url, headers=headers, proxy=proxy_url) as resp:
+
+        # Пробуем FLUX с коротким таймаутом (12с). Если очередь перегружена — сразу берем быстрый режим
+        url_flux = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
+        try:
+            flux_timeout = aiohttp.ClientTimeout(total=12)
+            async with aiohttp.ClientSession(timeout=flux_timeout) as session:
+                async with session.get(url_flux, headers=headers, proxy=proxy_url) as resp:
+                    if resp.status == 200:
+                        raw_bytes = await resp.read()
+                        if raw_bytes and len(raw_bytes) > 5000:
+                            return self._remove_watermark(raw_bytes)
+        except Exception as flux_err:
+            logger.info("[INFO] FLUX режим пропущен (%s), переход на быстрый генератор...", flux_err)
+
+        # Быстрый генератор
+        url_fast = f"https://image.pollinations.ai/prompt/{safe_prompt}?seed={seed}&nologo=true"
+        fast_timeout = aiohttp.ClientTimeout(total=self._timeout)
+        async with aiohttp.ClientSession(timeout=fast_timeout) as session:
+            async with session.get(url_fast, headers=headers, proxy=proxy_url) as resp:
                 if resp.status != 200:
                     raise ImageGenerationError(f"HTTP ошибка генератора: {resp.status}")
-                image_bytes = await resp.read()
-                if not image_bytes:
+                raw_bytes = await resp.read()
+                if not raw_bytes:
                     raise ImageGenerationError("Генератор вернул пустые данные.")
-                return image_bytes
+                return self._remove_watermark(raw_bytes)
 
     async def generate_image(self, prompt: str) -> bytes:
         """
