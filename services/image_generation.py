@@ -229,14 +229,49 @@ class ImageGenerationService:
         payload = {
             "inputs": english_prompt
         }
-        timeout = aiohttp.ClientTimeout(total=45)
+        timeout = aiohttp.ClientTimeout(total=50)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, json=payload, headers=headers) as resp:
                 if resp.status == 200:
                     raw_bytes = await resp.read()
                     if raw_bytes and len(raw_bytes) > 5000:
                         return raw_bytes
-                error_body = await resp.text()
+                
+                # Обработка лимитов и прогрева модели Hugging Face
+                retry_after = resp.headers.get("Retry-After")
+                error_body = ""
+                estimated_time = None
+                try:
+                    data = await resp.json()
+                    error_body = data.get("error", "")
+                    estimated_time = data.get("estimated_time")
+                except Exception:
+                    try:
+                        error_body = await resp.text()
+                    except Exception:
+                        pass
+
+                if estimated_time:
+                    raise ImageQuotaError(
+                        f"⏳ <b>Модель сейчас подготавливается на сервере Hugging Face.</b>\n\n"
+                        f"Примерное время ожидания: ~<b>{int(estimated_time)} сек.</b>\n"
+                        f"Пожалуйста, подождите полминуты и повторите отправку запроса."
+                    )
+
+                if resp.status == 429:
+                    wait_hint = f" ~{retry_after} сек." if retry_after else " 1–2 минуты"
+                    raise ImageQuotaError(
+                        f"⏳ <b>Лимит запросов к нейросети временно исчерпан.</b>\n\n"
+                        f"Пожалуйста, подождите{wait_hint} и повторите попытку.\n\n"
+                        f"<i>Частотный лимит сбрасывается каждую минуту, а суточная квота — в 00:00 UTC.</i>"
+                    )
+
+                if resp.status == 503:
+                    raise ImageQuotaError(
+                        "⏳ <b>Сервер генерации сейчас сильно загружен.</b>\n\n"
+                        "Пожалуйста, подождите 30–60 секунд и повторите отправку запроса."
+                    )
+
                 raise ImageGenerationError(f"Hugging Face HTTP {resp.status}: {error_body[:200]}")
 
     async def generate_image(self, prompt: str) -> Tuple[bytes, str, bool]:
@@ -250,17 +285,10 @@ class ImageGenerationService:
         # 1. Переводим промпт на детальный английский через Gemini
         english_prompt = await self._translate_prompt(prompt)
 
-        # 2. Если выбрана модель Hugging Face (Stable Diffusion 3 / FLUX)
+        # 2. Если выбрана модель Hugging Face (Stable Diffusion 3)
         if current_model in ("hf-sd3", "hf-flux"):
-            try:
-                hf_bytes = await self._generate_via_huggingface(english_prompt)
-                return hf_bytes, "Stable Diffusion 3 (HF)", False
-            except Exception as hf_err:
-                logger.warning("[WARNING] Hugging Face ошибка: %s, переключение на резерв...", hf_err)
-                if self._fallback_enabled:
-                    fallback_bytes = await self._generate_via_fallback(english_prompt, model="flux-realism")
-                    return fallback_bytes, "Flux Realism", True
-                raise hf_err
+            hf_bytes = await self._generate_via_huggingface(english_prompt)
+            return hf_bytes, "Stable Diffusion 3 (HF)", False
 
         # 3. Если выбрана модель Google Gemini / Pro / Imagen
         is_google_model = any(k in current_model.lower() for k in ["gemini", "banana", "imagen"])
@@ -272,21 +300,18 @@ class ImageGenerationService:
                     return image_bytes, current_model, False
                 logger.warning("[WARNING] Google модель %s не вернула изображение.", current_model)
             except errors.ClientError as ce:
-                logger.warning("[WARNING] Google ClientError (%s): %s", current_model, ce)
+                if ce.code == 429 and "limit: 0" in str(ce):
+                    raise ImageQuotaError(
+                        f"❌ <b>Модель Google '{current_model}' заблокирована на бесплатном ключе.</b>\n\n"
+                        "Google AI Studio требует подключить карту (Billing) для генерации изображений.\n\n"
+                        "💡 <i>В панели /admin переключите модель на «Stable Diffusion 3 (Hugging Face)» — "
+                        "она бесплатна, работает без карты и генерирует в высоком качестве 1024x1024.</i>"
+                    )
+                raise ImageGenerationError(f"Ошибка Google Image API: {ce.message}")
             except Exception as e:
                 logger.warning("[WARNING] Ошибка обращения к Google Image API: %s", e)
+                raise ImageGenerationError(f"Ошибка Google Image API: {e}")
 
-            # Если у Google квота 0 (нет привязанной карты в AI Studio) — прозрачный fallback
-            if self._fallback_enabled:
-                fallback_bytes = await self._generate_via_fallback(english_prompt, model="flux-realism")
-                return fallback_bytes, "Flux Realism", True
-
-            raise ImageQuotaError(
-                f"Модель Google '{current_model}' требует привязанного платежного аккаунта "
-                "в Google AI Studio (квота Free Tier: limit: 0). "
-                "Привяжите карту в Google Cloud/AI Studio или выберите модель 'Flux Realism' в панели /admin."
-            )
-
-        # 4. Если выбрана модель открытого семейства Flux / Turbo
+        # 4. Если выбрана модель открытого семейства
         fallback_bytes = await self._generate_via_fallback(english_prompt, model=current_model)
         return fallback_bytes, current_model, False

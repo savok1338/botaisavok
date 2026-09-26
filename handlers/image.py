@@ -128,8 +128,8 @@ async def process_image_prompt(
         except TelegramBadRequest:
             pass
         await message.answer(
-            f"ℹ️ {quota_err}\n\n"
-            "Вы можете продолжить общение в режиме «🤖 Чат с ИИ»."
+            str(quota_err),
+            parse_mode="HTML"
         )
 
     except Exception as exc:

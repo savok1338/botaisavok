@@ -23,8 +23,8 @@ GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "hf-sd3").strip()
 # Токен Hugging Face для бесплатной генерации FLUX.1
 HF_TOKEN: str = os.getenv("HF_TOKEN", "").strip()
 
-# Включение бесплатного fallback-генератора изображений (на случай лимита limit: 0 в Free Tier Google)
-ENABLE_FREE_IMAGE_FALLBACK: bool = os.getenv("ENABLE_FREE_IMAGE_FALLBACK", "true").lower() in ("true", "1", "yes")
+# Включение резервного генератора (отключен по умолчанию, чтобы не выдавать низкое качество)
+ENABLE_FREE_IMAGE_FALLBACK: bool = os.getenv("ENABLE_FREE_IMAGE_FALLBACK", "false").lower() in ("true", "1", "yes")
 
 # Таймаут на запросы к AI в секундах
 REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "60"))
